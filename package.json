@@ -1,6 +1,6 @@
 {
   "name": "fastify-jwt",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "JWT utils for Fastify",
   "main": "jwt.js",
   "engines": {
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fastify/fastify-jwt.git"
+    "url": "git+https://github.com/russitto/fastify-jwt.git"
   },
   "keywords": [
     "jwt",
@@ -23,9 +23,9 @@
   "author": "Tomas Della Vedova - @delvedor (http://delved.org)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/fastify/fastify-jwt/issues"
+    "url": "https://github.com/russitto/fastify-jwt/issues"
   },
-  "homepage": "https://github.com/fastify/fastify-jwt#readme",
+  "homepage": "https://github.com/russitto/fastify-jwt#readme",
   "dependencies": {
     "fastify-plugin": "^1.2.0",
     "http-errors": "^1.7.1",
