@@ -1,5 +1,5 @@
 {
-  "name": "fastify-jwt",
+  "name": "russitto-fastify-jwt",
   "version": "0.7.1",
   "description": "JWT utils for Fastify",
   "main": "jwt.js",
