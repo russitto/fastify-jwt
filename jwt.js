@@ -198,6 +198,8 @@ function fastifyJwt (fastify, options, next) {
           if (!/^Bearer$/i.test(scheme)) {
             return next(new BadRequest(badRequestErrorMessage))
           }
+        } else if (verifyOptions.bearerOptional === true) {
+          token = parts[0]
         } else {
           return next(new BadRequest(badRequestErrorMessage))
         }
