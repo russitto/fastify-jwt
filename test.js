@@ -4,6 +4,7 @@ const { readFileSync } = require('fs')
 const path = require('path')
 const test = require('tap').test
 const Fastify = require('fastify')
+const rawJwt = require('jsonwebtoken')
 
 const jwt = require('./jwt')
 
@@ -1333,7 +1334,7 @@ test('decode', function (t) {
 })
 
 test('errors', function (t) {
-  t.plan(6)
+  t.plan(8)
 
   const fastify = Fastify()
   fastify.register(jwt, { secret: 'test' })
@@ -1431,6 +1432,43 @@ test('errors', function (t) {
         })
       })
 
+      t.test('Expired token error', function (t) {
+        t.plan(2)
+
+        const expiredToken = fastify.jwt.sign({
+          exp: Math.floor(Date.now() / 1000) - 60,
+          foo: 'bar'
+        })
+        fastify.inject({
+          method: 'get',
+          url: '/verify',
+          headers: {
+            authorization: `Bearer ${expiredToken}`
+          }
+        }).then(function (response) {
+          const error = JSON.parse(response.payload)
+          t.is(error.message, 'Authorization token expired')
+          t.is(response.statusCode, 401)
+        })
+      })
+
+      t.test('Invalid signature error', function (t) {
+        t.plan(2)
+
+        const invalidSignatureToken = rawJwt.sign({ foo: 'bar' }, Buffer.alloc(64), {})
+        fastify.inject({
+          method: 'get',
+          url: '/verify',
+          headers: {
+            authorization: `Bearer ${invalidSignatureToken}`
+          }
+        }).then(function (response) {
+          const error = JSON.parse(response.payload)
+          t.is(error.message, 'Authorization token is invalid: invalid signature')
+          t.is(response.statusCode, 401)
+        })
+      })
+
       t.test('requestVerify function: steed.waterfall error function loop test', function (t) {
         t.plan(3)
 
@@ -1452,8 +1490,8 @@ test('errors', function (t) {
             }
           }).then(function (verifyResponse) {
             const error = JSON.parse(verifyResponse.payload)
-            t.is(error.message, 'jwt issuer invalid. expected: foo')
-            t.is(verifyResponse.statusCode, 500)
+            t.is(error.message, 'Authorization token is invalid: jwt issuer invalid. expected: foo')
+            t.is(verifyResponse.statusCode, 401)
           })
         })
       })
@@ -1500,8 +1538,8 @@ test('errors', function (t) {
             }
           }).then(function (response) {
             const error = JSON.parse(response.payload)
-            t.is(error.message, 'invalid token')
-            t.is(response.statusCode, 500)
+            t.is(error.message, 'Authorization token is invalid: invalid token')
+            t.is(response.statusCode, 401)
           })
         }).catch(function (error) {
           t.fail(error)
