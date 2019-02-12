@@ -29,7 +29,7 @@ fastify.listen(3000, err => {
 })
 ```
 
-For verifying & accessing the decoded token inside your services, you can use a global `preHandler` hook to define the verification process like so:
+For verifying & accessing the decoded token inside your services, you can use a global `onRequest` hook to define the verification process like so:
 
 ```js
 const fastify = require('fastify')
@@ -37,7 +37,7 @@ fastify.register(require('fastify-jwt'), {
   secret: 'supersecret'
 })
 
-fastify.addHook("preHandler", async (request, reply) => {
+fastify.addHook("onRequest", async (request, reply) => {
   try {
     await request.jwtVerify()
   } catch (err) {
@@ -76,14 +76,14 @@ module.exports = fp(async function(fastify, opts) {
 })
 ```
 
-Then use the `beforeHandler` of a route to protect it & access the user information inside:
+Then use the `onRequest` of a route to protect it & access the user information inside:
 
 ```js
 module.exports = async function(fastify, opts) {
   fastify.get(
     "/",
     {
-      beforeHandler: [fastify.authenticate]
+      onRequest: [fastify.authenticate]
     },
     async function(request, reply) {
       return request.user
@@ -332,6 +332,7 @@ fastify.listen(3000, err => {
 * `maxAge`: the maximum allowed age for tokens to still be valid. It is expressed in seconds or a string describing a time span [zeit/ms](https://github.com/zeit/ms). Eg: `1000`, `"2 days"`, `"10h"`, `"7d"`. A numeric value is interpreted as a seconds count. If you use a string be sure you provide the time units (days, hours, etc), otherwise milliseconds unit is used by default (`"120"` is equal to `"120ms"`).
 * `clockTimestamp`: the time in seconds that should be used as the current time for all necessary comparisons.
 * `bearerPrefix`: (default: true) if false does not use 'Bearer ' token prefix.
+* `bearerOptional`: (default: false) if true the use of 'Bearer ' token prefix is optional. Bear in mind that if `bearerPrefix` is false, you can't use `bearerOptional`.
 
 ### fastify.jwt.secret
 For your convenience, the `secret` you specify during `.register` is made available via `fastify.jwt.secret`. `request.jwtVerify()` and `reply.jwtSign()` will wrap non-function secrets in a callback function. `request.jwtVerify()` and `reply.jwtSign()` use an asynchronous waterfall method to retrieve your secret. It's recommended that your use these methods if your `secret` method is asynchronous.

@@ -198,6 +198,8 @@ function fastifyJwt (fastify, options, next) {
           if (!/^Bearer$/i.test(scheme)) {
             return next(new BadRequest(badRequestErrorMessage))
           }
+        } else if (verifyOptions.bearerOptional === true) {
+          token = parts[0]
         } else {
           return next(new BadRequest(badRequestErrorMessage))
         }
@@ -213,7 +215,15 @@ function fastifyJwt (fastify, options, next) {
         secretCallbackVerify(request, decodedToken, callback)
       },
       function verify (secretOrPublicKey, callback) {
-        jwt.verify(token, secretOrPublicKey, options, callback)
+        jwt.verify(token, secretOrPublicKey, options, (err, result) => {
+          if (err instanceof jwt.TokenExpiredError) {
+            return callback(new Unauthorized('Authorization token expired'))
+          }
+          if (err instanceof jwt.JsonWebTokenError) {
+            return callback(new Unauthorized('Authorization token is invalid: ' + err.message))
+          }
+          callback(err, result)
+        })
       }
     ], function (err, result) {
       if (err) next(err)

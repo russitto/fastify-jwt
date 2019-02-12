@@ -4,6 +4,7 @@ const { readFileSync } = require('fs')
 const path = require('path')
 const test = require('tap').test
 const Fastify = require('fastify')
+const rawJwt = require('jsonwebtoken')
 
 const jwt = require('./jwt')
 
@@ -22,7 +23,7 @@ const privateKeyProtectedECDSA = readFileSync(`${path.join(__dirname, 'certs')}/
 const publicKeyProtectedECDSA = readFileSync(`${path.join(__dirname, 'certs')}/publicECDSA.pem`)
 
 test('register', function (t) {
-  t.plan(10)
+  t.plan(11)
 
   t.test('Expose jwt methods', function (t) {
     t.plan(7)
@@ -325,6 +326,64 @@ test('register', function (t) {
             url: '/verify',
             headers: {
               authorization: token
+            }
+          }).then(function (verifyResponse) {
+            const decodedToken = JSON.parse(verifyResponse.payload)
+            t.is(decodedToken.foo, 'bar')
+          }).catch(function (error) {
+            t.fail(error)
+          })
+        }).catch(function (error) {
+          t.fail(error)
+        })
+      })
+  })
+
+  t.test('with bearer prefix optional', function (t) {
+    t.plan(3)
+    const fastify = Fastify()
+    fastify.register(jwt, { secret: 'test', verify: { bearerOptional: true } })
+
+    fastify.post('/sign', function (request, reply) {
+      reply.jwtSign(request.body)
+        .then(function (token) {
+          return reply.send({ token })
+        })
+    })
+
+    fastify.get('/verify', function (request, reply) {
+      return request.jwtVerify()
+    })
+
+    fastify
+      .ready()
+      .then(function () {
+        fastify.inject({
+          method: 'post',
+          url: '/sign',
+          payload: { foo: 'bar' }
+        }).then(function (signResponse) {
+          const token = JSON.parse(signResponse.payload).token
+          t.ok(token)
+
+          fastify.inject({
+            method: 'get',
+            url: '/verify',
+            headers: {
+              authorization: token
+            }
+          }).then(function (verifyResponse) {
+            const decodedToken = JSON.parse(verifyResponse.payload)
+            t.is(decodedToken.foo, 'bar')
+          }).catch(function (error) {
+            t.fail(error)
+          })
+
+          fastify.inject({
+            method: 'get',
+            url: '/verify',
+            headers: {
+              authorization: `Bearer ${token}`
             }
           }).then(function (verifyResponse) {
             const decodedToken = JSON.parse(verifyResponse.payload)
@@ -1333,7 +1392,7 @@ test('decode', function (t) {
 })
 
 test('errors', function (t) {
-  t.plan(6)
+  t.plan(9)
 
   const fastify = Fastify()
   fastify.register(jwt, { secret: 'test' })
@@ -1431,6 +1490,43 @@ test('errors', function (t) {
         })
       })
 
+      t.test('Expired token error', function (t) {
+        t.plan(2)
+
+        const expiredToken = fastify.jwt.sign({
+          exp: Math.floor(Date.now() / 1000) - 60,
+          foo: 'bar'
+        })
+        fastify.inject({
+          method: 'get',
+          url: '/verify',
+          headers: {
+            authorization: `Bearer ${expiredToken}`
+          }
+        }).then(function (response) {
+          const error = JSON.parse(response.payload)
+          t.is(error.message, 'Authorization token expired')
+          t.is(response.statusCode, 401)
+        })
+      })
+
+      t.test('Invalid signature error', function (t) {
+        t.plan(2)
+
+        const invalidSignatureToken = rawJwt.sign({ foo: 'bar' }, Buffer.alloc(64), {})
+        fastify.inject({
+          method: 'get',
+          url: '/verify',
+          headers: {
+            authorization: `Bearer ${invalidSignatureToken}`
+          }
+        }).then(function (response) {
+          const error = JSON.parse(response.payload)
+          t.is(error.message, 'Authorization token is invalid: invalid signature')
+          t.is(response.statusCode, 401)
+        })
+      })
+
       t.test('requestVerify function: steed.waterfall error function loop test', function (t) {
         t.plan(3)
 
@@ -1452,8 +1548,8 @@ test('errors', function (t) {
             }
           }).then(function (verifyResponse) {
             const error = JSON.parse(verifyResponse.payload)
-            t.is(error.message, 'jwt issuer invalid. expected: foo')
-            t.is(verifyResponse.statusCode, 500)
+            t.is(error.message, 'Authorization token is invalid: jwt issuer invalid. expected: foo')
+            t.is(verifyResponse.statusCode, 401)
           })
         })
       })
@@ -1500,8 +1596,58 @@ test('errors', function (t) {
             }
           }).then(function (response) {
             const error = JSON.parse(response.payload)
-            t.is(error.message, 'invalid token')
-            t.is(response.statusCode, 500)
+            t.is(error.message, 'Authorization token is invalid: invalid token')
+            t.is(response.statusCode, 401)
+          })
+        }).catch(function (error) {
+          t.fail(error)
+        })
+      })
+  })
+
+  t.test('without bearer prefix and optional bearer prefix', function (t) {
+    t.plan(3)
+    const fastify = Fastify()
+    fastify.register(jwt, { secret: 'test', verify: { bearerPrefix: false, bearerOptional: true } })
+
+    fastify.post('/sign', function (request, reply) {
+      reply.jwtSign(request.body)
+        .then(function (token) {
+          return reply.send({ token })
+        })
+    })
+
+    fastify.get('/verify', function (request, reply) {
+      return request.jwtVerify()
+        .then(function (decodedToken) {
+          return reply.send(decodedToken)
+        })
+        .catch(function (error) {
+          return reply.send(error)
+        })
+    })
+
+    fastify
+      .ready()
+      .then(function () {
+        fastify.inject({
+          method: 'post',
+          url: '/sign',
+          payload: { foo: 'bar' }
+        }).then(function (signResponse) {
+          const token = JSON.parse(signResponse.payload).token
+          t.ok(token)
+
+          fastify.inject({
+            method: 'get',
+            url: '/verify',
+            headers: {
+              authorization: `Bearer ${token}`
+            }
+          }).then(function (response) {
+            const error = JSON.parse(response.payload)
+            t.is(error.message, 'Authorization token is invalid: invalid token')
+            t.is(response.statusCode, 401)
           })
         }).catch(function (error) {
           t.fail(error)
